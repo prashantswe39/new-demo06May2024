@@ -1,12 +1,11 @@
-name: trivy
+name: trivy_with_comment_and_branch
 on:
-  push:
-    branches: [ "main" ]
-  pull_request:
-    # The branches below must be a subset of the branches above
-    branches: [ "main" ]
-  #schedule:
-  #  - cron: '27 23 * * 4'
+  pull_request_target:
+    types: [opened]
+    branches:
+      - develop
+    paths:
+      - '**' # Include all paths
 
 permissions:
   contents: read
@@ -14,21 +13,34 @@ permissions:
 jobs:
   build:
     permissions:
-      contents: read # for actions/checkout to fetch code
-      security-events: write # for github/codeql-action/upload-sarif to upload SARIF results
-      actions: read # only required for a private repository by github/codeql-action/upload-sarif to get the Action run status
+      contents: read
+      security-events: write
+      actions: read
     name: Build
-    runs-on: "ubuntu-20.04"
+    runs-on: ubuntu-20.04
     steps:
       - name: Checkout code
-       # uses: actions/checkout@v4
-     # - name: Build an image from Dockerfile
-     #   run: |
-     #     docker build -t docker.io/my-organization/my-app:${{ github.sha }} .
-
         uses: actions/checkout@v3
 
+      - name: Check PR for specific comment and branch
+        id: check_pr
+        uses: actions/github-script@v4
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const { pull_request } = context.payload;
+            const branchName = pull_request.head.ref;
+            const comment = pull_request.body || '';
+            if (branchName === 'develop' && comment.includes('Run Tests')) {
+              console.log('Specific comment found in the PR for the specific branch.');
+              process.exit(0);
+            } else {
+              console.log('Specific comment not found in the PR or the PR is not for the specific branch.');
+              process.exit(1);
+            }
+
       - name: Run Trivy vulnerability scanner in repo mode
+        if: steps.check_pr.outcome == 'success'
         uses: aquasecurity/trivy-action@master
         with:
           scan-type: 'fs'
@@ -38,20 +50,7 @@ jobs:
           severity: 'CRITICAL'
 
       - name: Upload Trivy scan results to GitHub Security tab
+        if: steps.check_pr.outcome == 'success'
         uses: github/codeql-action/upload-sarif@v2
         with:
           sarif_file: 'trivy-results.sarif'
-
-    #  - name: Run Trivy vulnerability scanner
-    #    uses: aquasecurity/trivy-action@7b7aa264d83dc58691451798b4d117d53d21edfe
-    #    with:
-    #      image-ref: 'docker.io/my-organization/my-app:${{ github.sha }}'
-    #      format: 'template'
-    #      template: '@/contrib/sarif.tpl'
-    #      output: 'trivy-results.sarif'
-    #      severity: 'CRITICAL,HIGH'
-
-     # - name: Upload Trivy scan results to GitHub Security tab
-     #   uses: github/codeql-action/upload-sarif@v2
-     #   with:
-     #     sarif_file: 'trivy-results.sarif'
