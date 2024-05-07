@@ -1,11 +1,11 @@
 name: trivy_with_comment_and_branch
 on:
-  pull_request_target:
+  pull_request:
     types: [opened]
     branches:
       - develop
-    paths:
-      - '**' # Include all paths
+  pull_request_review_comment:
+    types: [created]
 
 permissions:
   contents: read
@@ -24,23 +24,11 @@ jobs:
 
       - name: Check PR for specific comment and branch
         id: check_pr
-        uses: actions/github-script@v4
-        with:
-          github-token: ${{ secrets.ACCESS_TOKEN }}
-          script: |
-            const { pull_request } = context.payload;
-            const branchName = pull_request.head.ref;
-            const comment = pull_request.body || '';
-            if (branchName === 'develop' && comment.includes('Run Tests')) {
-              console.log('Specific comment found in the PR for the specific branch.');
-              process.exit(0);
-            } else {
-              console.log('Specific comment not found in the PR or the PR is not for the specific branch.');
-              process.exit(1);
-            }
+        if: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.ref == 'develop' && contains(github.event.pull_request.body, 'Run Tests') }}
+        run: exit 0
 
       - name: Run Trivy vulnerability scanner in repo mode
-        if: steps.check_pr.outcome == 'success'
+        if: ${{ steps.check_pr.outcome == 'success' }}
         uses: aquasecurity/trivy-action@master
         with:
           scan-type: 'fs'
@@ -50,7 +38,7 @@ jobs:
           severity: 'CRITICAL'
 
       - name: Upload Trivy scan results to GitHub Security tab
-        if: steps.check_pr.outcome == 'success'
+        if: ${{ steps.check_pr.outcome == 'success' }}
         uses: github/codeql-action/upload-sarif@v2
         with:
           sarif_file: 'trivy-results.sarif'
