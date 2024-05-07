@@ -26,7 +26,7 @@ jobs:
         id: check_pr
         uses: actions/github-script@v4
         with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+          github-token: ${{ secrets.ACCESS_TOKEN }}
           script: |
             const { pull_request } = context.payload;
             const branchName = pull_request.head.ref;
